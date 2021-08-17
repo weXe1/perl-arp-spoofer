@@ -1,4 +1,10 @@
 #!/usr/bin/perl
+
+#
+#   Author: <wexe1@protonmail.com>
+#   License: GNU GPL-3.0
+#
+
 use strict;
 use warnings;
 use Net::ARP;
@@ -29,7 +35,7 @@ GetOptions(
 
 $sleep = $sleep ? $sleep : 2;
 
-my $local_mac    = Net::ARP::get_mac($interface);
+my $local_mac = Net::ARP::get_mac($interface);
 if($local_mac eq 'unknown') {
     printcolor("[!!] Unknown local MAC address\n", 'red');
     exit 0;
@@ -37,13 +43,13 @@ if($local_mac eq 'unknown') {
 else {
     printcolor("[*] Local MAC is $local_mac\n", 'magenta');
 }
-my $target1_mac  = &get_mac_addr($target1_ip);
+my $target1_mac = &get_mac_addr($target1_ip);
 if($target1_mac eq 'unknown') {
     printcolor("[!!] Unknown MAC address of Target 1\n", 'red');
     exit 0;
 }
 
-my $target2_mac   = &get_mac_addr($target2_ip);
+my $target2_mac = &get_mac_addr($target2_ip);
 if($target2_mac eq 'unknown') {
     printcolor("[!!] Unknown MAC address of Target 2\n", 'red');
     exit 0;
@@ -52,7 +58,7 @@ if($target2_mac eq 'unknown') {
 printcolor("[*] Target 1: $target1_ip => $target1_mac\n", 'magenta');
 printcolor("[*] Target 2: $target2_ip => $target2_mac\n", 'magenta');
 
-$SIG{INT} = \&restore_arp;
+$SIG{TSTP} = $SIG{TERM} = $SIG{INT} = $SIG{QUIT} = $SIG{HUP} = \&restore_arp;
 
 printcolor("[+] Starting ARP spoofing...\n", 'green');
 printcolor("[+] Ctrl + C to Stop\n", 'green');
@@ -124,4 +130,4 @@ sub usage {
     exit 0;
 }
 
-BEGIN { &printcolor("ARP Spoofer\n".'-'x11 ."\n", 'bold blue'); }
+BEGIN { &printcolor("ARP Spoofer by weXe1\n".'-'x20 ."\n", 'bold blue'); }
